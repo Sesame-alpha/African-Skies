@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>African Skies — Aviation Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+<style>
+:root {
+  --white:#ffffff; --bg:#F0F4FA; --navy:#0B1F4B; --navy-mid:#1A3566;
+  --container:#D6E4F7; --container-mid:#C2D6F0; --accent:#1565C0;
+  --amber:#F59E0B; --green:#16A34A; --red:#DC2626; --sky:#38BDF8;
+  --text:#0B1F4B; --text2:#3A5A8C; --muted:#6B85A8; --border:#B8CEE8;
+  --sh:0 2px 12px rgba(11,31,75,.10); --sh2:0 4px 24px rgba(11,31,75,.13);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);}
+
+/* ── TOPBAR ── */
+.topbar{background:var(--navy);padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 16px rgba(11,31,75,.3);position:sticky;top:0;z-index:100;}
+.tl{display:flex;align-items:center;gap:12px;}
+.logo{width:32px;height:32px;background:linear-gradient(135deg,#1976D2,#38BDF8);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
+.brand{font-family:'Syne',sans-serif;font-size:17px;font-weight:800;color:#fff;letter-spacing:-.3px;white-space:nowrap;}
+.brand span{color:#38BDF8;}
+.brand-sub{font-size:9px;color:rgba(255,255,255,.4);letter-spacing:1.4px;text-transform:uppercase;margin-top:1px;}
+.tr{display:flex;align-items:center;gap:12px;}
+.live-badge{display:flex;align-items:center;gap:5px;font-size:10px;color:rgba(255,255,255,.55);letter-spacing:1px;text-transform:uppercase;}
+.dot{width:7px;height:7px;background:#16A34A;border-radius:50%;box-shadow:0 0 5px #16A34A;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.utc{font-family:'JetBrains Mono',monospace;font-size:12px;color:#38BDF8;background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.2);padding:4px 10px;border-radius:6px;letter-spacing:.8px;white-space:nowrap;}
+.utc-lbl{font-size:8px;color:rgba(255,255,255,.35);letter-spacing:1.5px;margin-right:5px;}
+
+/* ── SUMMARY BAR ── */
+.sumbar{background:var(--white);border-bottom:1px solid var(--border);padding:8px 16px;display:flex;align-items:center;gap:6px;flex-shrink:0;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.sumbar::-webkit-scrollbar{display:none;}
+.spill{display:flex;align-items:center;gap:6px;min-width:max-content;width:100%;}
+.stat{display:flex;align-items:center;gap:7px;background:var(--container);border:1px solid var(--border);border-radius:8px;padding:6px 12px;flex-shrink:0;}
+.sdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.snum{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:600;color:var(--navy);line-height:1;}
+.slbl{font-size:9px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;line-height:1;margin-top:1px;}
+.sdiv{width:1px;height:26px;background:var(--border);flex-shrink:0;}
+.export-btn{flex-shrink:0;margin-left:auto;background:var(--navy);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;transition:background .2s;}
+.export-btn:hover{background:var(--navy-mid);}
+
+/* ── MOBILE TABS ── */
+.mob-tabs{display:none;background:var(--white);border-bottom:1px solid var(--border);padding:0 16px;gap:0;flex-shrink:0;}
+.mtab{flex:1;padding:10px 4px;font-size:11px;font-weight:600;color:var(--muted);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;letter-spacing:.3px;transition:all .15s;text-align:center;}
+.mtab.active{color:var(--accent);border-bottom-color:var(--accent);}
+
+/* ── LAYOUT ── */
+.layout{display:grid;grid-template-columns:280px 1fr 300px;flex:1;overflow:hidden;height:calc(100vh - 54px - 52px);}
+
+/* ── PANELS ── */
+.panel{overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;height:100%;}
+.panel::-webkit-scrollbar{width:4px;}
+.panel::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+.panel-left{background:var(--white);border-right:1px solid var(--border);}
+.panel-right{background:var(--white);border-left:1px solid var(--border);}
+
+/* ── MAP ── */
+.map-wrap{position:relative;overflow:hidden;background:#EBF4FF;}
+#mapCanvas{display:block;cursor:grab;touch-action:none;}
+#mapCanvas:active{cursor:grabbing;}
+.map-ctrl{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:4px;}
+.mbtn{width:34px;height:34px;background:var(--white);border:1px solid var(--border);border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;color:var(--navy);box-shadow:var(--sh);user-select:none;transition:background .15s;}
+.mbtn:hover,.mbtn:active{background:var(--container);}
+.tip{position:absolute;background:var(--navy);color:#fff;border-radius:8px;padding:8px 12px;font-size:11px;pointer-events:none;display:none;z-index:20;min-width:155px;box-shadow:var(--sh2);line-height:1.6;}
+.tip-id{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:12px;color:#38BDF8;margin-bottom:3px;}
+.tap-hint{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:rgba(11,31,75,.7);color:rgba(255,255,255,.75);font-size:10px;padding:4px 12px;border-radius:20px;pointer-events:none;letter-spacing:.3px;}
+
+/* ── CARDS ── */
+.card{background:var(--container);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.ch{background:var(--navy);padding:9px 13px;display:flex;align-items:center;justify-content:space-between;}
+.ct{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:rgba(255,255,255,.9);letter-spacing:1.2px;text-transform:uppercase;}
+.cb2{font-family:'JetBrains Mono',monospace;font-size:10px;color:#38BDF8;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.25);padding:2px 7px;border-radius:4px;}
+.cbody{padding:12px;}
+
+/* ── SEARCH ── */
+.si{width:100%;background:var(--white);border:1px solid var(--border);border-radius:7px;padding:9px 12px;font-size:13px;font-family:'Inter',sans-serif;color:var(--text);outline:none;transition:border-color .2s;}
+.si:focus{border-color:var(--accent);}
+.si::placeholder{color:var(--muted);}
+.frow{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap;}
+.fbtn{font-size:10px;font-weight:600;letter-spacing:.4px;padding:5px 10px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--text2);cursor:pointer;transition:all .15s;text-transform:uppercase;}
+.fbtn.active,.fbtn:hover{background:var(--navy);color:#fff;border-color:var(--navy);}
+
+/* ── FLIGHT LIST ── */
+.flist{display:flex;flex-direction:column;gap:5px;}
+.frow2{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:8px;}
+.frow2:hover{border-color:var(--accent);background:#EBF2FC;}
+.frow2.sel{border-color:var(--accent);background:#D6E8FB;box-shadow:0 0 0 2px rgba(21,101,192,.15);}
+.fsb{width:3px;height:38px;border-radius:2px;flex-shrink:0;}
+.fn{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:var(--navy);}
+.fr{font-size:11px;color:var(--muted);margin-top:2px;}
+.fa{font-size:10px;color:var(--muted);margin-top:1px;}
+.fsbadge{margin-left:auto;font-size:9px;font-weight:700;letter-spacing:.4px;padding:3px 7px;border-radius:4px;text-transform:uppercase;flex-shrink:0;}
+.bg-g{background:#D1FAE5;color:#065F46;}
+.bg-a{background:#FEF3C7;color:#92400E;}
+.bg-r{background:#FEE2E2;color:#991B1B;}
+.bg-b{background:#DBEAFE;color:#1E40AF;}
+
+/* ── METAR ── */
+.atabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;}
+.atab{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;padding:5px 9px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--text2);cursor:pointer;transition:all .15s;letter-spacing:.4px;}
+.atab.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+.mc{background:var(--white);border:1px solid var(--border);border-radius:7px;padding:8px 10px;}
+.mlbl{font-size:9px;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:3px;}
+.mval{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;color:var(--navy);}
+.munit{font-size:10px;color:var(--muted);font-family:'Inter',sans-serif;font-weight:400;}
+.impwrap{margin-top:10px;background:var(--white);border:1px solid var(--border);border-radius:7px;padding:9px 10px;}
+.implbl{font-size:10px;color:var(--muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;}
+.impbadge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;}
+.imptrack{height:7px;background:var(--container-mid);border-radius:4px;overflow:hidden;}
+.impfill{height:100%;border-radius:4px;transition:width .4s ease;}
+
+/* ── ML ── */
+.mlph{background:var(--white);border:1px solid var(--border);border-radius:7px;padding:20px;text-align:center;color:var(--muted);font-size:12px;line-height:1.6;}
+.mlres{display:none;}
+.mlpd{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;}
+.mlid{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:var(--accent);margin-bottom:8px;}
+.mlpn{font-family:'JetBrains Mono',monospace;font-size:32px;font-weight:600;line-height:1;margin-bottom:4px;}
+.mlv{font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px;}
+.mlbt{height:8px;background:var(--container-mid);border-radius:4px;overflow:hidden;margin-bottom:4px;}
+.mlbf{height:100%;border-radius:4px;transition:width .6s cubic-bezier(.4,0,.2,1);}
+.mlcl{font-size:10px;color:var(--muted);display:flex;justify-content:space-between;}
+.mlfact{display:flex;flex-direction:column;gap:5px;margin-top:8px;}
+.mlfr{background:var(--white);border:1px solid var(--border);border-radius:6px;padding:7px 10px;display:flex;justify-content:space-between;align-items:center;font-size:11px;}
+.mfll{color:var(--text2);}
+.mflv{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:var(--navy);}
+.ml-low{color:var(--green);} .ml-mod{color:var(--amber);} .ml-high{color:var(--red);}
+.bar-low{background:var(--green);} .bar-mod{background:var(--amber);} .bar-high{background:var(--red);}
+
+/* ── INSIGHT ── */
+.ins{background:var(--white);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:7px;padding:9px 11px;font-size:11px;color:var(--text2);line-height:1.55;}
+.ins.warn{border-left-color:var(--amber);}
+.ins.alert{border-left-color:var(--red);}
+
+/* ── NOTAM ── */
+.nitem{background:var(--white);border:1px solid var(--border);border-radius:7px;padding:9px 10px;margin-bottom:5px;}
+.nhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+.nid{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:var(--accent);}
+.nap{font-family:'JetBrains Mono',monospace;font-size:9px;background:var(--container);color:var(--navy);padding:2px 6px;border-radius:4px;font-weight:600;}
+.ntxt{font-size:11px;color:var(--text2);line-height:1.5;}
+.nval{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-top:3px;}
+
+/* ── SPINNER ── */
+.spin{display:inline-block;width:13px;height:13px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:rot .7s linear infinite;vertical-align:middle;margin-right:5px;}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* ── SECTION LABEL ── */
+.slabel{font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;display:block;}
+
+/* ══════════════════════════════
+   RESPONSIVE — MOBILE
+══════════════════════════════ */
+@media(max-width:768px){
+  body{height:auto;overflow:auto;}
+  .brand-sub,.live-badge{display:none;}
+  .utc{font-size:11px;padding:3px 8px;}
+
+  .sumbar{padding:8px 12px;}
+
+  .mob-tabs{display:flex;}
+
+  .layout{
+    display:block;
+    height:auto;
+    overflow:visible;
+  }
+
+  .panel-left,.panel-right{
+    display:none;
+    height:auto;
+    overflow:visible;
+    border:none;
+    padding:12px;
+  }
+  .panel-left.show,.panel-right.show{display:flex;}
+
+  .map-wrap{
+    display:none;
+    height:60vw;
+    min-height:260px;
+    max-height:400px;
+  }
+  .map-wrap.show{display:block;}
+
+  .panel{height:auto;}
+  .flight-list-wrap{max-height:none;}
+  .flist{max-height:none;}
+
+  .tap-hint{display:block;}
+}
+
+@media(min-width:769px){
+  .tap-hint{display:none;}
+  .mob-tabs{display:none;}
+  .layout{display:grid;}
+  .panel-left,.panel-right,.map-wrap{display:flex !important;}
+  .map-wrap{display:block !important;}
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="tl">
+    <div class="logo">✈</div>
+    <div>
+      <div class="brand">African <span>Skies</span></div>
+      <div class="brand-sub">Aviation Intelligence</div>
+    </div>
+  </div>
+  <div class="tr">
+    <div class="live-badge"><div class="dot"></div>Live</div>
+    <div class="utc"><span class="utc-lbl">UTC</span><span id="utcTime">--:--:--</span></div>
+  </div>
+</header>
+
+<!-- SUMMARY BAR -->
+<div class="sumbar">
+  <div class="spill">
+    <div class="stat"><div class="sdot" style="background:#1565C0"></div><div><div class="snum" id="s-total">0</div><div class="slbl">Total</div></div></div>
+    <div class="stat"><div class="sdot" style="background:#16A34A"></div><div><div class="snum" id="s-enr">0</div><div class="slbl">En Route</div></div></div>
+    <div class="stat"><div class="sdot" style="background:#F59E0B"></div><div><div class="snum" id="s-del">0</div><div class="slbl">Delayed</div></div></div>
+    <div class="stat"><div class="sdot" style="background:#38BDF8"></div><div><div class="snum" id="s-land">0</div><div class="slbl">Landed</div></div></div>
+    <div class="stat"><div class="sdot" style="background:#DC2626"></div><div><div class="snum" id="s-can">0</div><div class="slbl">Cancelled</div></div></div>
+    <div class="sdiv"></div>
+    <button class="export-btn" onclick="exportCSV()">⬇ CSV</button>
+  </div>
+</div>
+
+<!-- MOBILE TABS -->
+<div class="mob-tabs" id="mobTabs">
+  <button class="mtab active" onclick="showTab('flights',this)">✈ Flights</button>
+  <button class="mtab" onclick="showTab('map',this)">🗺 Map</button>
+  <button class="mtab" onclick="showTab('weather',this)">🌤 Weather</button>
+  <button class="mtab" onclick="showTab('ml',this)">🧠 ML</button>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout" id="layout">
+
+  <!-- LEFT: FLIGHTS -->
+  <aside class="panel panel-left show" id="tab-flights">
+    <div class="card">
+      <div class="ch"><span class="ct">Flight Search</span></div>
+      <div class="cbody">
+        <input class="si" id="searchInput" placeholder="Flight no., airline, airport…" oninput="filterFlights()">
+        <div class="frow">
+          <button class="fbtn active" onclick="setFilter('ALL',this)">All</button>
+          <button class="fbtn" onclick="setFilter('EN ROUTE',this)">En Route</button>
+          <button class="fbtn" onclick="setFilter('DELAYED',this)">Delayed</button>
+          <button class="fbtn" onclick="setFilter('LANDED',this)">Landed</button>
+          <button class="fbtn" onclick="setFilter('CANCELLED',this)">Cancelled</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><span class="ct">Tracked Flights</span><span class="cb2" id="fcount">0</span></div>
+      <div class="cbody" style="padding:8px">
+        <div class="flist" id="flist"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAP -->
+  <div class="map-wrap" id="tab-map">
+    <canvas id="mapCanvas"></canvas>
+    <div class="map-ctrl">
+      <div class="mbtn" onclick="zoom(1.2)">+</div>
+      <div class="mbtn" onclick="zoom(0.83)">−</div>
+      <div class="mbtn" onclick="resetView()">⌂</div>
+    </div>
+    <div class="tip" id="tip"></div>
+    <div class="tap-hint">Tap a flight · Pinch to zoom</div>
+  </div>
+
+  <!-- RIGHT: WEATHER + ML + NOTAMS -->
+  <aside class="panel panel-right" id="tab-right">
+
+    <!-- METAR -->
+    <div class="card">
+      <div class="ch"><span class="ct">METAR · Weather</span><span class="cb2" id="metarBadge">GBE</span></div>
+      <div class="cbody">
+        <div class="atabs" id="atabs"></div>
+        <div class="mgrid" id="mgrid"></div>
+        <div class="impwrap">
+          <div class="implbl"><span>Weather Impact</span><span class="impbadge" id="impBadge">—</span></div>
+          <div class="imptrack"><div class="impfill" id="impFill" style="width:0%"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ML -->
+    <div class="card" id="tab-ml-card">
+      <div class="ch"><span class="ct">Delay Prediction · ML</span><span class="cb2">TF.js</span></div>
+      <div class="cbody">
+        <div id="mlPh" class="mlph">Select a flight to run delay prediction.</div>
+        <div class="mlres" id="mlRes">
+          <div class="mlpd">
+            <div class="mlid" id="mlId">—</div>
+            <div class="mlpn" id="mlPn">—</div>
+            <div class="mlv" id="mlVerd">—</div>
+            <div class="mlbt"><div class="mlbf" id="mlBar" style="width:0%"></div></div>
+            <div class="mlcl"><span>Low risk</span><span>High risk</span></div>
+          </div>
+          <div class="mlfact" id="mlFact"></div>
+          <div style="margin-top:10px">
+            <span class="slabel">Operational Insight</span>
+            <div class="ins" id="mlIns"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NOTAMS -->
+    <div class="card">
+      <div class="ch"><span class="ct">NOTAMs</span><span class="cb2">Active</span></div>
+      <div class="cbody" id="notams"></div>
+    </div>
+
+  </aside>
+</div>
+
+<script>
+// ══════════════════════════════════════
+// DATA
+// ══════════════════════════════════════
+const FLIGHTS=[
+  {id:'A2-101',airline:'Air Botswana',from:'GBE',to:'JNB',status:'EN ROUTE',lat:-23.5,lon:27.2,alt:35000,spd:480,eta:'14:35',dist:650,age:.4,prev:15,hour:10},
+  {id:'A2-204',airline:'Air Botswana',from:'GBE',to:'CPT',status:'DELAYED',lat:-25.8,lon:25.1,alt:28000,spd:440,eta:'17:10',dist:1400,age:.6,prev:45,hour:12},
+  {id:'ET-301',airline:'Ethiopian Air',from:'ADD',to:'JNB',status:'EN ROUTE',lat:-15.2,lon:31.5,alt:37000,spd:510,eta:'15:20',dist:3200,age:.2,prev:5,hour:9},
+  {id:'ET-402',airline:'Ethiopian Air',from:'ADD',to:'NBO',status:'EN ROUTE',lat:-1.3,lon:37.0,alt:36000,spd:495,eta:'13:55',dist:1800,age:.3,prev:10,hour:8},
+  {id:'KQ-501',airline:'Kenya Airways',from:'NBO',to:'JNB',status:'DELAYED',lat:-10.5,lon:33.2,alt:32000,spd:460,eta:'16:45',dist:2700,age:.7,prev:60,hour:11},
+  {id:'KQ-602',airline:'Kenya Airways',from:'NBO',to:'LOS',status:'EN ROUTE',lat:4.2,lon:25.8,alt:38000,spd:505,eta:'14:20',dist:3500,age:.5,prev:20,hour:7},
+  {id:'SA-701',airline:'South African',from:'JNB',to:'CPT',status:'LANDED',lat:-33.9,lon:18.6,alt:0,spd:0,eta:'Arrived',dist:1400,age:.3,prev:5,hour:6},
+  {id:'SA-802',airline:'South African',from:'JNB',to:'DUR',status:'EN ROUTE',lat:-28.3,lon:30.4,alt:25000,spd:420,eta:'13:50',dist:600,age:.4,prev:0,hour:10},
+  {id:'QR-901',airline:'Qatar Airways',from:'DOH',to:'JNB',status:'EN ROUTE',lat:-5.5,lon:35.0,alt:39000,spd:530,eta:'18:30',dist:7200,age:.1,prev:5,hour:8},
+  {id:'MS-111',airline:'EgyptAir',from:'CAI',to:'ADD',status:'CANCELLED',lat:14.5,lon:37.8,alt:0,spd:0,eta:'Cancelled',dist:2800,age:.8,prev:90,hour:9},
+  {id:'TC-212',airline:'Air Tanzania',from:'DAR',to:'NBO',status:'EN ROUTE',lat:-5.0,lon:39.5,alt:31000,spd:445,eta:'14:10',dist:900,age:.6,prev:15,hour:11},
+  {id:'RW-313',airline:'RwandAir',from:'KGL',to:'JNB',status:'DELAYED',lat:-18.3,lon:32.1,alt:29000,spd:430,eta:'17:55',dist:3100,age:.5,prev:35,hour:12},
+];
+
+const AIRPORTS={
+  GBE:{wind:'12KT 080°',vis:'9999m',temp:'22°C',cond:'Clear',score:15},
+  JNB:{wind:'18KT 240°',vis:'6000m',temp:'18°C',cond:'Overcast',score:55},
+  ADD:{wind:'8KT 310°',vis:'9000m',temp:'19°C',cond:'FEW Clouds',score:25},
+  NBO:{wind:'22KT 190°',vis:'4800m',temp:'24°C',cond:'Heavy Rain',score:80},
+  CPT:{wind:'30KT 280°',vis:'8000m',temp:'14°C',cond:'Strong Wind',score:65},
+};
+
+const NOTAMS=[
+  {id:'A1204/26',airport:'GBE',text:'RWY 08/26 closed for resurfacing 0600–1400 UTC daily. Use RWY 02/20 only.',val:'10–20 JUN 2026'},
+  {id:'A0983/26',airport:'JNB',text:'ILS CAT III suspended on RWY 03L due to equipment maintenance.',val:'09–14 JUN 2026'},
+  {id:'A1156/26',airport:'NBO',text:'Significant CBs in TMA. Expect holding delays up to 45 min.',val:'10 JUN 2026'},
+  {id:'A0812/26',airport:'ADD',text:'New taxiway Alpha-7 commissioned. Charts updated.',val:'01–30 JUN 2026'},
+  {id:'A1301/26',airport:'CPT',text:'Strong crosswind advisory. Gusts exceeding 35KT on all runways.',val:'10 JUN 2026'},
+];
+
+const INSIGHTS={
+  'EN ROUTE':['Flight progressing normally. No intervention required.','Monitor upper winds — ETA may shift ±8 min on this corridor.','High-altitude winds increasing fuel burn rate on this sector.'],
+  'DELAYED':['Crew duty time review recommended — cumulative delay may breach limits.','Gate coordination required. Notify ground ops of revised ETA.','Proactive passenger rebooking advised for tight connections.'],
+  'LANDED':['Flight completed. Turnaround checks in progress.'],
+  'CANCELLED':['Flight cancelled. Rebooking protocols activated. Review slot recovery with ATC.'],
+};
+
+// ══════════════════════════════════════
+// MAP
+// ══════════════════════════════════════
+const canvas=document.getElementById('mapCanvas');
+const ctx=canvas.getContext('2d');
+let mapW,mapH,scale=1,offsetX=0,offsetY=0;
+let drag=false,dsx,dsy,dox,doy;
+let pinching=false,lastPinchDist=0;
+let selFlight=null,hovFlight=null,animF=0;
+const LONMIN=-20,LONMAX=55,LATMIN=-38,LATMAX=40;
+
+function ll2xy(lat,lon){
+  const x=(lon-LONMIN)/(LONMAX-LONMIN)*mapW;
+  const m=l=>Math.log(Math.tan(Math.PI/4+l*Math.PI/360));
+  const ny=(m(lat)-m(LATMIN))/(m(LATMAX)-m(LATMIN));
+  return{x:x*scale+offsetX,y:(1-ny)*mapH*scale+offsetY};
+}
+
+function resizeCv(){
+  const p=canvas.parentElement;
+  canvas.width=p.clientWidth;
+  canvas.height=p.clientHeight;
+  mapW=canvas.width;mapH=canvas.height;
+}
+
+const OUTLINE=[
+  [37.3,11.5],[36.5,14.2],[34.0,11.0],[30.5,10.3],[27.0,4.2],[24.0,3.8],[18.0,3.5],
+  [16.5,2.0],[16.0,-0.5],[9.5,-4.5],[8.8,-7.8],[2.8,-9.5],[-1.5,-14.5],[-5.5,-12.3],
+  [-8.5,-13.5],[-13.2,-17.3],[-17.5,-15.8],[-17.5,-14.7],[-15.5,-9.6],[-15.5,-8.0],
+  [-17.5,-7.0],[-17.5,-5.0],[-15.8,-2.0],[-16.8,0.5],[-16.0,2.0],[-14.5,5.0],
+  [-13.0,9.0],[-11.0,12.0],[-9.0,14.5],[-5.5,14.5],[-1.0,12.5],[1.5,6.0],
+  [1.0,5.0],[3.0,5.5],[4.0,4.2],[6.0,4.0],[9.0,4.2],[9.5,2.5],[10.0,1.7],
+  [15.0,2.0],[16.5,2.0],[17.5,4.5],[22.0,4.2],[24.0,2.5],[26.5,2.5],[30.5,1.5],
+  [34.0,-0.5],[37.0,-3.0],[40.5,-2.3],[41.5,2.0],[42.5,8.0],[43.0,11.5],
+  [44.5,12.5],[46.0,11.8],[48.0,12.5],[50.0,11.5],[51.5,12.0],[44.5,8.5],
+  [41.0,4.0],[38.5,-0.5],[38.0,-4.5],[37.5,-7.0],[36.5,-11.0],[34.5,-15.0],
+  [34.0,-17.5],[35.5,-18.5],[36.5,-22.5],[34.0,-26.5],[31.5,-29.5],[30.5,-31.5],
+  [28.0,-33.0],[26.5,-33.8],[18.5,-34.8],[17.5,-34.0],[16.5,-29.5],[16.0,-23.5],
+  [12.0,-17.0],[11.5,-15.0],[12.0,-7.0],[12.5,-5.0],[11.8,-3.0],[9.0,-1.5],
+  [8.5,4.0],[8.5,5.5],[4.0,7.0],[2.5,9.5],[1.5,6.0],[0.5,5.8],[-1.0,5.0],
+  [-3.5,5.2],[-5.5,5.5],[-7.5,4.7],[-7.5,6.0],[-9.5,6.5],[-10.5,7.5],
+  [-11.5,8.0],[-15.0,10.5],[-15.5,12.5],[-15.5,14.0],[-17.5,14.7],
+  [-17.5,15.8],[-13.5,19.5],[-8.0,24.0],[-4.0,26.0],[-1.0,26.5],
+  [3.0,24.0],[9.5,22.0],[13.5,23.5],[15.5,23.0],[24.0,20.0],[29.0,21.0],
+  [33.0,22.0],[37.0,22.0],[38.5,20.0],[41.5,15.5],[42.0,12.0],[43.0,11.5],[37.3,11.5]
+];
+
+const APCOORDS={GBE:[-24.65,25.92],JNB:[-26.13,28.24],ADD:[8.98,38.80],NBO:[-1.32,36.92],CPT:[-33.96,18.60],LOS:[6.58,3.32],DAR:[-6.88,39.20],KGL:[-1.97,30.14],DUR:[-29.97,30.95],DOH:[25.27,51.56],CAI:[30.11,31.41]};
+
+function scolor(s){return{'EN ROUTE':'#16A34A','DELAYED':'#F59E0B','LANDED':'#38BDF8','CANCELLED':'#DC2626'}[s]||'#666';}
+function sbg(s){return{'EN ROUTE':'bg-g','DELAYED':'bg-a','LANDED':'bg-b','CANCELLED':'bg-r'}[s]||'';}
+
+function drawMap(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#C8DDEF';ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // grid
+  ctx.strokeStyle='rgba(11,31,75,.05)';ctx.lineWidth=1;
+  for(let lon=-20;lon<=55;lon+=15){const a=ll2xy(LATMAX,lon),b=ll2xy(LATMIN,lon);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
+  for(let lat=-30;lat<=35;lat+=15){const a=ll2xy(lat,LONMIN),b=ll2xy(lat,LONMAX);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
+
+  // landmass
+  ctx.beginPath();
+  OUTLINE.forEach(([lon,lat],i)=>{const p=ll2xy(lat,lon);i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y);});
+  ctx.closePath();ctx.fillStyle='#EEF4FA';ctx.fill();
+  ctx.strokeStyle='#B8CEE8';ctx.lineWidth=1.2;ctx.stroke();
+
+  // routes
+  FLIGHTS.forEach(f=>{
+    if(f.status==='LANDED'||f.status==='CANCELLED')return;
+    const fr=APCOORDS[f.from],to=APCOORDS[f.to];if(!fr||!to)return;
+    const p1=ll2xy(fr[0],fr[1]),p2=ll2xy(to[0],to[1]);
+    ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(p2.x,p2.y);
+    ctx.strokeStyle='rgba(21,101,192,.1)';ctx.lineWidth=1;ctx.setLineDash([3,5]);ctx.stroke();ctx.setLineDash([]);
+  });
+
+  // airports
+  Object.entries(AIRPORTS).forEach(([code])=>{
+    const c=APCOORDS[code];if(!c)return;
+    const p=ll2xy(c[0],c[1]);
+    ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fillStyle='#1565C0';ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();
+    ctx.fillStyle='#1565C0';ctx.font='bold 10px JetBrains Mono,monospace';
+    ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(code,p.x+6,p.y-4);
+  });
+
+  // aircraft
+  FLIGHTS.forEach(f=>{
+    const p=ll2xy(f.lat,f.lon);
+    const isSel=selFlight&&selFlight.id===f.id;
+    const isHov=hovFlight&&hovFlight.id===f.id;
+    const col=scolor(f.status);
+    if(isSel){
+      ctx.beginPath();ctx.arc(p.x,p.y,16,0,Math.PI*2);
+      ctx.fillStyle=col+'22';ctx.fill();
+      ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.stroke();
+    }
+    const bob=Math.sin(animF*.05+f.id.charCodeAt(0))*1.5;
+    ctx.save();ctx.translate(p.x,p.y+bob);
+    if(f.status!=='LANDED'&&f.status!=='CANCELLED')ctx.rotate(45*Math.PI/180);
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    if(f.status==='CANCELLED'){
+      ctx.fillStyle=col;ctx.font='bold 12px Inter';ctx.fillText('✕',0,0);
+    }else{
+      ctx.font='15px serif';ctx.fillText('✈',0,0);
+    }
+    ctx.restore();
+    if(isSel||isHov){
+      const lw=ctx.measureText(f.id).width+12;
+      ctx.fillStyle='rgba(255,255,255,.92)';ctx.fillRect(p.x-lw/2,p.y+14,lw,17);
+      ctx.fillStyle='#0B1F4B';ctx.font='bold 10px JetBrains Mono,monospace';
+      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(f.id,p.x,p.y+22);
+    }
+  });
+}
+
+function animate(){
+  animF++;
+  if(animF%60===0)FLIGHTS.forEach(f=>{if(f.status==='EN ROUTE'){f.lat+=(Math.random()-.5)*.08;f.lon+=(Math.random()-.5)*.08;}});
+  drawMap();requestAnimationFrame(animate);
+}
+
+// Mouse events
+canvas.addEventListener('mousedown',e=>{drag=true;dsx=e.clientX;dsy=e.clientY;dox=offsetX;doy=offsetY;canvas.style.cursor='grabbing';});
+canvas.addEventListener('mousemove',e=>{
+  if(drag){offsetX=dox+(e.clientX-dsx);offsetY=doy+(e.clientY-dsy);return;}
+  const r=canvas.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+  hovFlight=null;FLIGHTS.forEach(f=>{const p=ll2xy(f.lat,f.lon);if(Math.hypot(p.x-mx,p.y-my)<14)hovFlight=f;});
+  const t=document.getElementById('tip');
+  if(hovFlight){const f=hovFlight;t.innerHTML=`<div class="tip-id">✈ ${f.id}</div>${f.airline}<br>${f.from}→${f.to}<br>Alt:${f.alt.toLocaleString()}ft · ${f.spd}kt<br>ETA:${f.eta}`;t.style.display='block';t.style.left=(mx+14)+'px';t.style.top=(my-10)+'px';canvas.style.cursor='pointer';}
+  else{t.style.display='none';canvas.style.cursor='grab';}
+});
+canvas.addEventListener('mouseup',()=>{drag=false;canvas.style.cursor=hovFlight?'pointer':'grab';});
+canvas.addEventListener('mouseleave',()=>{drag=false;document.getElementById('tip').style.display='none';});
+canvas.addEventListener('dblclick',e=>{
+  const r=canvas.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+  FLIGHTS.forEach(f=>{const p=ll2xy(f.lat,f.lon);if(Math.hypot(p.x-mx,p.y-my)<18)selFlight=f,filterFlights(),runML(f);});
+});
+canvas.addEventListener('wheel',e=>{e.preventDefault();zoom(e.deltaY<0?1.1:.9);},{passive:false});
+
+// Touch events
+canvas.addEventListener('touchstart',e=>{
+  if(e.touches.length===1){drag=true;dsx=e.touches[0].clientX;dsy=e.touches[0].clientY;dox=offsetX;doy=offsetY;}
+  else if(e.touches.length===2){pinching=true;drag=false;lastPinchDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);}
+},{passive:true});
+canvas.addEventListener('touchmove',e=>{
+  if(drag&&e.touches.length===1){offsetX=dox+(e.touches[0].clientX-dsx);offsetY=doy+(e.touches[0].clientY-dsy);}
+  else if(pinching&&e.touches.length===2){
+    const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    zoom(d/lastPinchDist);lastPinchDist=d;
+  }
+},{passive:true});
+canvas.addEventListener('touchend',e=>{
+  if(e.changedTouches.length===1&&!pinching){
+    const r=canvas.getBoundingClientRect(),mx=e.changedTouches[0].clientX-r.left,my=e.changedTouches[0].clientY-r.top;
+    let hit=null;FLIGHTS.forEach(f=>{const p=ll2xy(f.lat,f.lon);if(Math.hypot(p.x-mx,p.y-my)<22)hit=f;});
+    if(hit){selFlight=hit;filterFlights();runML(hit);showTab('ml',document.querySelector('[onclick*="ml"]'));}
+  }
+  drag=false;pinching=false;
+},{passive:true});
+
+function zoom(f){const cx=canvas.width/2,cy=canvas.height/2;offsetX=cx+(offsetX-cx)*f;offsetY=cy+(offsetY-cy)*f;scale*=f;}
+function resetView(){scale=1;offsetX=0;offsetY=0;}
+
+// ══════════════════════════════════════
+// FLIGHT LIST
+// ══════════════════════════════════════
+let activeFilter='ALL';
+function setFilter(s,btn){activeFilter=s;document.querySelectorAll('.fbtn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');filterFlights();}
+function filterFlights(){
+  const q=document.getElementById('searchInput').value.toLowerCase();
+  const fil=FLIGHTS.filter(f=>(activeFilter==='ALL'||f.status===activeFilter)&&(!q||f.id.toLowerCase().includes(q)||f.airline.toLowerCase().includes(q)||f.from.toLowerCase().includes(q)||f.to.toLowerCase().includes(q)));
+  const list=document.getElementById('flist');list.innerHTML='';
+  document.getElementById('fcount').textContent=fil.length;
+  fil.forEach(f=>{
+    const d=document.createElement('div');
+    d.className='frow2'+(selFlight&&selFlight.id===f.id?' sel':'');
+    d.innerHTML=`<div class="fsb" style="background:${scolor(f.status)}"></div><div style="flex:1;min-width:0"><div class="fn">${f.id}</div><div class="fr">${f.from} → ${f.to}</div><div class="fa">${f.airline}</div></div><div class="fsbadge ${sbg(f.status)}">${f.status}</div>`;
+    d.onclick=()=>{selFlight=f;filterFlights();runML(f);};
+    list.appendChild(d);
+  });
+}
+
+// ══════════════════════════════════════
+// ML
+// ══════════════════════════════════════
+let tfModel=null;
+async function buildModel(){
+  const m=tf.sequential();
+  m.add(tf.layers.dense({inputShape:[5],units:16,activation:'relu'}));
+  m.add(tf.layers.dense({units:8,activation:'relu'}));
+  m.add(tf.layers.dense({units:1,activation:'sigmoid'}));
+  m.compile({optimizer:'adam',loss:'binaryCrossentropy'});
+  const xs=[],ys=[];
+  for(let i=0;i<200;i++){const h=Math.random()*24,w=Math.random(),d=Math.random(),a=Math.random(),p=Math.random()*120;xs.push([h/24,w,d,a,p/120]);ys.push([(w*.4+(p/120)*.3+a*.1+(h>12?.1:0)+(d>.7?.1:0))>.45?1:0]);}
+  await m.fit(tf.tensor2d(xs),tf.tensor2d(ys),{epochs:20,verbose:0});
+  tfModel=m;
+}
+
+async function runML(f){
+  const ph=document.getElementById('mlPh'),res=document.getElementById('mlRes');
+  ph.innerHTML='<span class="spin"></span>Running prediction…';ph.style.display='block';res.style.display='none';
+  if(!tfModel)await buildModel();
+  const ws=(AIRPORTS[f.from]?.score||30)/100;
+  const inp=tf.tensor2d([[f.hour/24,ws,Math.min(f.dist/8000,1),f.age,Math.min(f.prev/120,1)]]);
+  const pred=await tfModel.predict(inp).data();
+  const prob=Math.round(pred[0]*100);
+  let verd,vc,bc;
+  if(prob<35){verd='Low Risk';vc='ml-low';bc='bar-low';}
+  else if(prob<65){verd='Moderate Risk';vc='ml-mod';bc='bar-mod';}
+  else{verd='High Risk';vc='ml-high';bc='bar-high';}
+  document.getElementById('mlId').textContent=`${f.id}  ${f.from} → ${f.to}`;
+  document.getElementById('mlPn').textContent=prob+'%';
+  document.getElementById('mlPn').className='mlpn '+vc;
+  document.getElementById('mlVerd').textContent=verd;
+  document.getElementById('mlVerd').className='mlv '+vc;
+  document.getElementById('mlBar').style.width=prob+'%';
+  document.getElementById('mlBar').className='mlbf '+bc;
+  document.getElementById('mlFact').innerHTML=[['Hour',f.hour+':00'],['Weather',(ws*100).toFixed(0)+'%'],['Distance',f.dist.toLocaleString()+' km'],['Age Factor',(f.age*100).toFixed(0)+'%'],['Prior Delay',f.prev+' min']].map(([l,v])=>`<div class="mlfr"><span class="mfll">${l}</span><span class="mflv">${v}</span></div>`).join('');
+  const ins=INSIGHTS[f.status]||INSIGHTS['EN ROUTE'];
+  const el=document.getElementById('mlIns');
+  el.textContent=ins[Math.floor(Math.random()*ins.length)];
+  el.className='ins'+(f.status==='DELAYED'?' warn':f.status==='CANCELLED'?' alert':'');
+  ph.style.display='none';res.style.display='block';
+}
+
+// ══════════════════════════════════════
+// METAR
+// ══════════════════════════════════════
+let activeAP='GBE';
+function renderMETAR(){
+  document.getElementById('atabs').innerHTML=Object.keys(AIRPORTS).map(c=>`<button class="atab ${c===activeAP?'active':''}" onclick="switchAP('${c}')">${c}</button>`).join('');
+  const a=AIRPORTS[activeAP];
+  document.getElementById('metarBadge').textContent=activeAP;
+  document.getElementById('mgrid').innerHTML=`
+    <div class="mc"><div class="mlbl">Wind</div><div class="mval">${a.wind.split(' ')[0]}<span class="munit"> ${a.wind.split(' ')[1]||''}</span></div></div>
+    <div class="mc"><div class="mlbl">Visibility</div><div class="mval">${a.vis.replace('m','')}<span class="munit"> m</span></div></div>
+    <div class="mc"><div class="mlbl">Temperature</div><div class="mval">${a.temp}</div></div>
+    <div class="mc"><div class="mlbl">Condition</div><div class="mval" style="font-size:12px;font-family:Inter">${a.cond}</div></div>`;
+  const s=a.score;
+  let lbl,col,bg;
+  if(s<35){lbl='Low';col='#16A34A';bg='#D1FAE5;color:#065F46';}
+  else if(s<65){lbl='Moderate';col='#F59E0B';bg='#FEF3C7;color:#92400E';}
+  else{lbl='High';col='#DC2626';bg='#FEE2E2;color:#991B1B';}
+  document.getElementById('impBadge').style.cssText='background:'+bg;
+  document.getElementById('impBadge').textContent=lbl;
+  document.getElementById('impFill').style.width=s+'%';
+  document.getElementById('impFill').style.background=col;
+}
+function switchAP(c){activeAP=c;renderMETAR();}
+
+// ══════════════════════════════════════
+// NOTAMS
+// ══════════════════════════════════════
+function renderNOTAMs(){
+  document.getElementById('notams').innerHTML=NOTAMS.map(n=>`<div class="nitem"><div class="nhead"><span class="nid">${n.id}</span><span class="nap">${n.airport}</span></div><div class="ntxt">${n.text}</div><div class="nval">${n.val}</div></div>`).join('');
+}
+
+// ══════════════════════════════════════
+// STATS + CLOCK
+// ══════════════════════════════════════
+function updateStats(){
+  document.getElementById('s-total').textContent=FLIGHTS.length;
+  document.getElementById('s-enr').textContent=FLIGHTS.filter(f=>f.status==='EN ROUTE').length;
+  document.getElementById('s-del').textContent=FLIGHTS.filter(f=>f.status==='DELAYED').length;
+  document.getElementById('s-land').textContent=FLIGHTS.filter(f=>f.status==='LANDED').length;
+  document.getElementById('s-can').textContent=FLIGHTS.filter(f=>f.status==='CANCELLED').length;
+}
+function updateClock(){
+  const n=new Date();
+  document.getElementById('utcTime').textContent=[n.getUTCHours(),n.getUTCMinutes(),n.getUTCSeconds()].map(v=>String(v).padStart(2,'0')).join(':');
+}
+
+// ══════════════════════════════════════
+// MOBILE TAB NAVIGATION
+// ══════════════════════════════════════
+function showTab(tab,btn){
+  if(window.innerWidth>768)return;
+  // Hide all
+  document.getElementById('tab-flights').classList.remove('show');
+  document.getElementById('tab-map').classList.remove('show');
+  document.getElementById('tab-right').classList.remove('show');
+  // Show target
+  if(tab==='flights')document.getElementById('tab-flights').classList.add('show');
+  else if(tab==='map'){document.getElementById('tab-map').classList.add('show');setTimeout(()=>{resizeCv();},50);}
+  else if(tab==='weather'||tab==='ml'){document.getElementById('tab-right').classList.add('show');}
+  // Update tab buttons
+  document.querySelectorAll('.mtab').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  // Scroll to top
+  window.scrollTo(0,0);
+}
+
+// ══════════════════════════════════════
+// CSV EXPORT
+// ══════════════════════════════════════
+function exportCSV(){
+  const h=['Flight','Airline','From','To','Status','Altitude (ft)','Speed (kt)','ETA'];
+  const rows=FLIGHTS.map(f=>[f.id,f.airline,f.from,f.to,f.status,f.alt,f.spd,f.eta]);
+  const csv=[h,...rows].map(r=>r.join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='african_skies.csv';a.click();
+}
+
+// ══════════════════════════════════════
+// INIT
+// ══════════════════════════════════════
+window.addEventListener('resize',()=>{
+  resizeCv();
+  // On resize to desktop, ensure all panels visible
+  if(window.innerWidth>768){
+    document.getElementById('tab-flights').classList.remove('show');
+    document.getElementById('tab-map').classList.remove('show');
+    document.getElementById('tab-right').classList.remove('show');
+  }
+});
+resizeCv();
+updateStats();filterFlights();renderMETAR();renderNOTAMs();
+setInterval(updateClock,1000);updateClock();
+buildModel();animate();
+</script>
+</body>
+</html>
